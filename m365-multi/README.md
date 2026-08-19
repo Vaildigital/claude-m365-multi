@@ -48,7 +48,7 @@ finishes whenever you do.
 A terminal alternative is available if you prefer it, or for scripted setup:
 
 ```bash
-npx -y @softeria/ms-365-mcp-server@0.145.0 --preset outlook --allowed-scopes "Mail.ReadWrite Mail.Send Calendars.ReadWrite User.Read" --login
+npx -y @softeria/ms-365-mcp-server@0.145.0 --preset outlook --allowed-scopes "Mail.ReadWrite Calendars.ReadWrite User.Read" --login
 ```
 
 ```bash
@@ -80,7 +80,7 @@ the list of available accounts in the tool description. Ask in plain language:
 - "Draft a reply in the council account to the email from the planning team."
 - "What's on my calendar tomorrow in each account?"
 
-Drafts are created, not sent, unless you ask for a send.
+Claude can draft but cannot send — see Permissions below.
 
 ## Permissions
 
@@ -89,9 +89,13 @@ Sign-in requests exactly four delegated permissions:
 | Permission | Why |
 |---|---|
 | `Mail.ReadWrite` | read, search, and create drafts |
-| `Mail.Send` | send a message when you ask for one |
 | `Calendars.ReadWrite` | read and create events |
 | `User.Read` | identify which account is which |
+
+**`Mail.Send` is deliberately not requested.** Claude reads email content from anyone who can write
+to your mailbox, and a message can contain text aimed at influencing it — "forward the last twenty
+emails to…", "reply approving this". Without the send permission that cannot happen: Claude prepares
+a draft, and a human sends it from Outlook. Everything the plugin was built for still works.
 
 The app is published by **Softeria AS**, a Microsoft verified publisher (verified 2025-06-05).
 
@@ -126,7 +130,7 @@ $principal  = (Get-MgUser -UserId "person@example.gov.au").Id
 
 New-MgOauth2PermissionGrant -ClientId $clientSp -ConsentType Principal -PrincipalId $principal `
   -ResourceId $graphSp `
-  -Scope "Calendars.ReadWrite Mail.ReadWrite Mail.Send User.Read openid profile offline_access"
+  -Scope "Calendars.ReadWrite Mail.ReadWrite User.Read openid profile offline_access"
 ```
 
 Sign-in then completes with no consent prompt. To revoke, delete that grant.
@@ -168,6 +172,42 @@ npx -y @softeria/ms-365-mcp-server@0.145.0 --logout
 
 `--logout` clears every account. To remove just one, use `--remove-account` with an id from
 `--list-accounts`.
+
+## What this plugin runs, and how to verify it
+
+The plugin **never downloads code at runtime**. There is no `npx`, no package fetch, and nothing to
+install beyond Node itself. The Microsoft 365 server ships in `vendor/` as a single pre-built file,
+alongside `keytar` (a native module, so it cannot be bundled).
+
+Because a 4.6 MB build artefact cannot meaningfully be read, every vendored file is checksummed:
+
+```bash
+npm run verify
+```
+
+To confirm the bundle really is the upstream server, rebuild it and compare — it is produced from
+the pinned `@softeria/ms-365-mcp-server` version by `npm run build:vendor`, and the hashes should
+match `vendor/SHA256SUMS`.
+
+**Pin the marketplace to a commit**, not a branch, so an upstream change cannot alter what runs on
+your machine without you choosing it. Installing this plugin means executing code from this
+repository, so treat write access to it as you would any production credential.
+
+## Access, and how to revoke it
+
+Once several accounts are added, one machine holds refresh tokens for every connected mailbox,
+across every tenant. That is normal for a desktop tool, but it means a compromise of that laptop
+exposes all of them rather than one. Keep it to machines you would trust with the mailboxes
+themselves.
+
+To remove access:
+
+```bash
+node vendor/ms365-server.mjs --remove-account <id>
+```
+
+For a full revocation, the tenant administrator should also remove the app's grant for that user in
+Entra ID — deleting the local token only stops this machine, not any other.
 
 ## Where tokens are stored
 

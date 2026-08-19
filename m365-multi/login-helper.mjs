@@ -11,7 +11,15 @@
 // that the main m365 server reads.
 
 import { spawn } from 'node:child_process';
-import { openSync, readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import {
+  openSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+  unlinkSync,
+  readdirSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +66,30 @@ const parseLog = (text) => ({
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Quote a value for a PowerShell single-quoted string. Inside single quotes the
+// only special character is the quote itself, escaped by doubling. Without this,
+// a path containing an apostrophe — legal in Windows usernames, so it appears in
+// the plugin path for users like O'Brien — terminates the string and the rest is
+// parsed as PowerShell.
+const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+// Remove run logs from previous sign-ins. They accumulate in TEMP otherwise, and
+// they hold device codes and account names.
+const sweepOldLogs = () => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  try {
+    for (const name of readdirSync(tmpdir())) {
+      if (!/^m365-multi-login-.+\.log$/.test(name)) continue;
+      const p = join(tmpdir(), name);
+      try {
+        if (statSync(p).mtimeMs < cutoff) unlinkSync(p);
+      } catch {}
+    }
+  } catch {}
+};
+
 async function startLogin() {
+  sweepOldLogs();
   try {
     if (existsSync(STATE)) unlinkSync(STATE);
   } catch {}
@@ -81,8 +112,8 @@ async function startLogin() {
     writeFileSync(LOG, '');
     writeFileSync(LOG_ERR, '');
     const ps =
-      `Start-Process -FilePath '${process.execPath}' -ArgumentList '"${runner}"' ` +
-      `-RedirectStandardOutput '${LOG}' -RedirectStandardError '${LOG_ERR}' -WindowStyle Hidden`;
+      `Start-Process -FilePath ${psq(process.execPath)} -ArgumentList ${psq(`"${runner}"`)} ` +
+      `-RedirectStandardOutput ${psq(LOG)} -RedirectStandardError ${psq(LOG_ERR)} -WindowStyle Hidden`;
     spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
       stdio: 'ignore',
       windowsHide: true,

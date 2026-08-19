@@ -1,15 +1,17 @@
 {
   "mcpServers": {
     "m365": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "@softeria/ms-365-mcp-server@0.145.0",
+        "${CLAUDE_PLUGIN_ROOT}/vendor/ms365-server.mjs",
         "--preset",
         "outlook",
         "--allowed-scopes",
-        "Mail.ReadWrite Mail.Send Calendars.ReadWrite User.Read"
-      ]
+        "Mail.ReadWrite Calendars.ReadWrite User.Read"
+      ],
+      "env": {
+        "MS365_MCP_REQUIRE_CONFIRM": "true"
+      }
     },
     "m365-login": {
       "command": "node",
