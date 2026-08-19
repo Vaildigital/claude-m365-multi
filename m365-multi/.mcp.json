@@ -13,7 +13,7 @@
     },
     "m365-login": {
       "command": "node",
-      "args": ["./login-helper.mjs"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/login-helper.mjs"]
     }
   }
 }
