@@ -1,0 +1,13 @@
+{
+  "name": "vail-m365",
+  "owner": {
+    "name": "Vail Digital"
+  },
+  "plugins": [
+    {
+      "name": "m365-multi",
+      "source": "./m365-multi",
+      "description": "Read, search and draft across multiple Microsoft 365 mailboxes and calendars in one session, without reconnecting between accounts."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "m365": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@softeria/ms-365-mcp-server@0.145.0",
+        "--preset",
+        "outlook",
+        "--allowed-scopes",
+        "Mail.ReadWrite Mail.Send Calendars.ReadWrite User.Read"
+      ]
+    }
+  }
+}
