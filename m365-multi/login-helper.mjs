@@ -13,15 +13,8 @@
 import { spawn } from 'node:child_process';
 import { openSync, readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-const PKG = '@softeria/ms-365-mcp-server@0.145.0';
-const SERVER_ARGS = [
-  '--preset',
-  'outlook',
-  '--allowed-scopes',
-  'Mail.ReadWrite Mail.Send Calendars.ReadWrite User.Read',
-];
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const LOG = join(tmpdir(), 'm365-multi-login.log');
 const LOG_ERR = join(tmpdir(), 'm365-multi-login.err.log');
@@ -65,27 +58,29 @@ async function startLogin() {
     } catch {}
   }
 
-  const args = ['-y', PKG, ...SERVER_ARGS, '--login'];
-  let child;
+  const runner = join(dirname(fileURLToPath(import.meta.url)), 'login-runner.mjs');
 
   if (process.platform === 'win32') {
-    // On Windows, `detached: true` breaks stdout redirection — the child runs
-    // but writes nowhere, so the device code can never be read back. Verified
-    // across fd-inheritance, cmd.exe and shell forms. Start-Process launches a
-    // genuinely independent process and does its own redirection, which works.
+    // `detached: true` breaks stdout redirection on Windows — the child runs but
+    // writes nowhere, so the device code can never be read back. Verified across
+    // fd-inheritance, cmd.exe and shell forms. Start-Process launches a genuinely
+    // independent process and does its own redirection.
+    //
+    // Launch node by absolute path (process.execPath) rather than a PATH lookup:
+    // this process environment is not guaranteed to resolve `npx` or `node` the
+    // way an interactive shell does.
     writeFileSync(LOG, '');
     writeFileSync(LOG_ERR, '');
-    const argList = args.map((a) => (a.includes(' ') ? `'"${a}"'` : `'${a}'`)).join(',');
     const ps =
-      `Start-Process -FilePath 'npx.cmd' -ArgumentList ${argList} ` +
+      `Start-Process -FilePath '${process.execPath}' -ArgumentList '"${runner}"' ` +
       `-RedirectStandardOutput '${LOG}' -RedirectStandardError '${LOG_ERR}' -WindowStyle Hidden`;
-    child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+    spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
       stdio: 'ignore',
       windowsHide: true,
     });
   } else {
     const fd = openSync(LOG, 'a');
-    child = spawn('npx', args, {
+    const child = spawn(process.execPath, [runner], {
       detached: true,
       stdio: ['ignore', fd, fd],
     });
@@ -110,7 +105,15 @@ async function startLogin() {
       };
     }
   }
-  return { status: 'error', message: 'No device code appeared within 90s. Check ' + LOG };
+  // Surface whatever the background process actually said, so the failure can be
+  // diagnosed from here instead of asking the user to go and read a log file.
+  const diag = readLog().trim().slice(-500);
+  return {
+    status: 'error',
+    message: 'No device code appeared within 90 seconds.',
+    processOutput: diag || '(the background process produced no output at all)',
+    logPath: LOG,
+  };
 }
 
 function loginStatus() {
@@ -145,6 +148,16 @@ function loginStatus() {
     return { status: 'declined', message: 'Sign-in was declined or cancelled. Call start-login again.' };
   if (p.expired)
     return { status: 'expired', message: 'The device code expired unused. Call start-login again.' };
+
+  const raw = readLog().trim();
+  if (!p.code && !p.url) {
+    return {
+      status: 'stuck',
+      message: 'The sign-in process started but never produced a device code.',
+      processOutput: raw.slice(-500) || '(the background process produced no output at all)',
+      logPath: LOG,
+    };
+  }
 
   return {
     status: 'pending',
