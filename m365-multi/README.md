@@ -31,6 +31,11 @@ Add the marketplace, then install the plugin:
 
 ## Sign in
 
+**Sign in from a terminal, not by asking Claude to log you in.** In Cowork the plugin's server is
+restarted between turns, and the device code flow polls inside that process — so an in-app login is
+discarded before you finish in the browser and silently never completes. A terminal command runs to
+completion in one process and writes the token cache the plugin reads.
+
 Run this **once per account**. It prints a URL and a short code — open the URL, enter the code, and
 sign in as the account you want to add. Repeat for each mailbox.
 
@@ -44,7 +49,9 @@ Then confirm what's registered:
 npx -y @softeria/ms-365-mcp-server@0.145.0 --list-accounts
 ```
 
-Restart Claude after adding accounts so the tool descriptions pick up the new list.
+A newly added account won't show up until the plugin's server restarts, which happens on its own
+between turns in Cowork, or when you restart Claude Code. If an account you just added seems
+missing, ask again in a moment rather than signing in a second time.
 
 ### Expect one failure on the first account in each new tenant
 
