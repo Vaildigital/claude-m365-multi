@@ -16,9 +16,14 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const LOG = join(tmpdir(), 'm365-multi-login.log');
-const LOG_ERR = join(tmpdir(), 'm365-multi-login.err.log');
+// Each sign-in gets its own log files, named by run id, with the paths recorded
+// in STATE. A previous run's output can then never be mistaken for the current
+// one — which otherwise leaves status reporting a dead run as "pending" forever.
 const STATE = join(tmpdir(), 'm365-multi-login.json');
+const logPaths = (runId) => ({
+  out: join(tmpdir(), `m365-multi-login-${runId}.log`),
+  err: join(tmpdir(), `m365-multi-login-${runId}.err.log`),
+});
 
 const readState = () => {
   try {
@@ -28,9 +33,10 @@ const readState = () => {
   }
 };
 
-const readLog = () => {
+const readLog = (state) => {
+  if (!state) return '';
   let out = '';
-  for (const f of [LOG, LOG_ERR]) {
+  for (const f of [state.out, state.err]) {
     try {
       out += readFileSync(f, 'utf8');
     } catch {}
@@ -39,6 +45,7 @@ const readLog = () => {
 };
 
 const parseLog = (text) => ({
+  finished: /__RUNNER_EXIT__/.test(text),
   url: text.match(/open the page (\S+)/)?.[1] ?? null,
   code: text.match(/enter the code (\S+)/)?.[1] ?? null,
   success: /"success"\s*:\s*true/.test(text) || /Login successful/i.test(text),
@@ -52,11 +59,13 @@ const parseLog = (text) => ({
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function startLogin() {
-  for (const f of [LOG, LOG_ERR, STATE]) {
-    try {
-      if (existsSync(f)) unlinkSync(f);
-    } catch {}
-  }
+  try {
+    if (existsSync(STATE)) unlinkSync(STATE);
+  } catch {}
+
+  const runId = Date.now().toString(36);
+  const { out: LOG, err: LOG_ERR } = logPaths(runId);
+  const state = { runId, out: LOG, err: LOG_ERR, startedAt: Date.now() };
 
   const runner = join(dirname(fileURLToPath(import.meta.url)), 'login-runner.mjs');
 
@@ -87,12 +96,13 @@ async function startLogin() {
     child.unref();
   }
 
-  writeFileSync(STATE, JSON.stringify({ startedAt: Date.now() }));
+  writeFileSync(STATE, JSON.stringify(state));
 
-  // Wait for the device code to appear. npx may need to fetch the package first.
-  for (let i = 0; i < 90; i++) {
+  // Wait for the device code to appear. npx may need to fetch the package first,
+  // which on a cold cache can take a while.
+  for (let i = 0; i < 150; i++) {
     await sleep(1000);
-    const parsed = parseLog(readLog());
+    const parsed = parseLog(readLog(state));
     if (parsed.code && parsed.url) {
       return {
         status: 'awaiting_browser',
@@ -107,10 +117,12 @@ async function startLogin() {
   }
   // Surface whatever the background process actually said, so the failure can be
   // diagnosed from here instead of asking the user to go and read a log file.
-  const diag = readLog().trim().slice(-500);
+  const diag = readLog(state).trim().slice(-500);
   return {
     status: 'error',
-    message: 'No device code appeared within 90 seconds.',
+    message:
+      'No device code appeared within 150 seconds. The sign-in may still be starting — call ' +
+      'login-status before starting another one.',
     processOutput: diag || '(the background process produced no output at all)',
     logPath: LOG,
   };
@@ -120,7 +132,7 @@ function loginStatus() {
   const state = readState();
   if (!state) return { status: 'not_started', message: 'No sign-in has been started.' };
 
-  const p = parseLog(readLog());
+  const p = parseLog(readLog(state));
   if (p.success) {
     return {
       status: 'success',
@@ -149,13 +161,28 @@ function loginStatus() {
   if (p.expired)
     return { status: 'expired', message: 'The device code expired unused. Call start-login again.' };
 
-  const raw = readLog().trim();
+  const raw = readLog(state).trim();
+
+  // The runner has exited without a success line: this run is over and will
+  // never complete, however long it is left. Say so rather than reporting
+  // pending forever.
+  if (p.finished) {
+    return {
+      status: 'failed',
+      message:
+        'The sign-in process has exited without completing. Any code from this attempt is dead — ' +
+        'start a new sign-in rather than waiting or retrying the old code.',
+      processOutput: raw.slice(-500) || '(no output)',
+      logPath: state.out,
+    };
+  }
+
   if (!p.code && !p.url) {
     return {
       status: 'stuck',
-      message: 'The sign-in process started but never produced a device code.',
+      message: 'The sign-in process started but has not produced a device code yet.',
       processOutput: raw.slice(-500) || '(the background process produced no output at all)',
-      logPath: LOG,
+      logPath: state.out,
     };
   }
 
@@ -163,6 +190,7 @@ function loginStatus() {
     status: 'pending',
     code: p.code,
     url: p.url,
+    startedAt: new Date(state.startedAt).toISOString(),
     message: 'Still waiting for the browser sign-in to complete.',
   };
 }

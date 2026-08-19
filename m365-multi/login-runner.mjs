@@ -26,8 +26,15 @@ const child =
       )
     : spawn('npx', ['-y', PKG, ...ARGS], { stdio: 'inherit' });
 
-child.on('exit', (code) => process.exit(code ?? 0));
+// Emit a sentinel when the sign-in process ends. Without it a run that died
+// is indistinguishable from one still waiting on the browser, and status
+// reports "pending" forever.
+child.on('exit', (code) => {
+  console.log(`\n__RUNNER_EXIT__ ${code ?? 0}`);
+  process.exit(code ?? 0);
+});
 child.on('error', (e) => {
   console.error('runner failed to start sign-in: ' + (e?.message ?? e));
+  console.log('\n__RUNNER_EXIT__ 1');
   process.exit(1);
 });
