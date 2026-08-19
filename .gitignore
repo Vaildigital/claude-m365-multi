@@ -1,1 +1,4 @@
-node_modules/
+# Development dependencies, used only to build the vendored bundle.
+# Anchored so it does not also exclude m365-multi/vendor/node_modules,
+# which is shipped deliberately.
+/m365-multi/node_modules/

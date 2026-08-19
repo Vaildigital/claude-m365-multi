@@ -1,9 +1,18 @@
 {
   "name": "m365-multi-plugin",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "Bundled dependency for the m365-multi Claude plugin, so the sign-in never depends on npx or PATH at runtime.",
+  "description": "Build tooling for the m365-multi Claude plugin. The server is vendored into vendor/ as a single file so the plugin never depends on npx, PATH, or a dependency install at runtime.",
   "type": "module",
+  "scripts": {
+    "build:vendor": "npm install && npm run bundle && npm run copy:data && npm run copy:keytar",
+    "bundle": "esbuild node_modules/@softeria/ms-365-mcp-server/dist/index.js --bundle --platform=node --format=esm --outfile=vendor/ms365-server.mjs --external:keytar --external:@azure/identity --external:@azure/keyvault-secrets --banner:js=\"import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\"",
+    "copy:data": "node -e \"require('fs').copyFileSync('node_modules/@softeria/ms-365-mcp-server/dist/endpoints.json','vendor/endpoints.json')\"",
+    "copy:keytar": "node -e \"require('fs').cpSync('node_modules/keytar','vendor/node_modules/keytar',{recursive:true})\""
+  },
+  "devDependencies": {
+    "esbuild": "0.25.0"
+  },
   "dependencies": {
     "@softeria/ms-365-mcp-server": "0.145.0"
   }

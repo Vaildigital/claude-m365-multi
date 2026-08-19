@@ -117,13 +117,17 @@ async function startLogin() {
   }
   // Surface whatever the background process actually said, so the failure can be
   // diagnosed from here instead of asking the user to go and read a log file.
-  const diag = readLog(state).trim().slice(-500);
+  // Distinguish "still working" from "dead". A runner that has not exited may
+  // still produce a code — that has happened — so do not call it an error.
+  const diag = readLog(state).trim();
+  const died = /__RUNNER_EXIT__/.test(diag);
   return {
-    status: 'error',
-    message:
-      'No device code appeared within 150 seconds. The sign-in may still be starting — call ' +
-      'login-status before starting another one.',
-    processOutput: diag || '(the background process produced no output at all)',
+    status: died ? 'error' : 'starting',
+    message: died
+      ? 'The sign-in process exited before producing a device code.'
+      : 'No device code yet after 150 seconds, but the sign-in process is still running. ' +
+        'Call login-status shortly rather than starting another sign-in.',
+    processOutput: diag.slice(-500) || '(the background process produced no output at all)',
     logPath: LOG,
   };
 }

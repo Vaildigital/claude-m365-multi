@@ -18,6 +18,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, dirname, delimiter } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PKG = '@softeria/ms-365-mcp-server';
 const VERSION = '0.145.0';
@@ -27,13 +28,37 @@ const ARGS = ['--preset', 'outlook', '--allowed-scopes', SCOPES, '--login'];
 const nodeDir = dirname(process.execPath);
 const env = { ...process.env, PATH: nodeDir + delimiter + (process.env.PATH ?? '') };
 
+if (process.platform === 'win32') {
+  // npx launches the package through a .cmd shim. Without PATHEXT, cmd cannot
+  // resolve the extension and fails with "'ms-365-mcp-server' is not
+  // recognized"; without ComSpec it has no shell to use at all. The host does
+  // not necessarily pass either, so supply Windows defaults when missing.
+  const sysRoot = process.env.SystemRoot ?? process.env.windir ?? 'C:\\Windows';
+  env.PATHEXT = process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD;.VBS;.JS;.WSF;.MSC';
+  env.ComSpec = process.env.ComSpec ?? join(sysRoot, 'System32', 'cmd.exe');
+}
+
+console.log(
+  `[runner] node=${process.execPath} inheritedPATHEXT=${!!process.env.PATHEXT} ` +
+    `inheritedComSpec=${!!process.env.ComSpec} pathEntries=${(process.env.PATH ?? '').split(delimiter).length}`
+);
+
 const done = (code) => {
   console.log(`\n__RUNNER_EXIT__ ${code}`);
   process.exit(code);
 };
 
-// Preferred: the copy installed as this plugin's own dependency.
-const resolveBundled = () => {
+// Preferred: the single-file bundle committed under vendor/. It carries the
+// server and its dependencies, so nothing has to be installed or resolved at
+// runtime. keytar is vendored beside it (native, so it cannot be bundled);
+// without it the server falls back to a file-based cache key.
+const resolveVendored = () => {
+  const entry = join(dirname(fileURLToPath(import.meta.url)), 'vendor', 'ms365-server.mjs');
+  return existsSync(entry) ? entry : null;
+};
+
+// Next: a copy installed as a plugin dependency, if the host installed one.
+const resolveInstalled = () => {
   try {
     const require = createRequire(import.meta.url);
     const pkgJsonPath = require.resolve(`${PKG}/package.json`);
@@ -55,11 +80,12 @@ const resolveNpxCli = () =>
     join(nodeDir, '..', 'node_modules', 'npm', 'bin', 'npx-cli.js'),
   ].find((p) => existsSync(p)) ?? null;
 
-const entry = resolveBundled();
+const vendored = resolveVendored();
+const entry = vendored ?? resolveInstalled();
 let child;
 
 if (entry) {
-  console.log(`[runner] using bundled dependency: ${entry}`);
+  console.log(`[runner] using ${vendored ? 'vendored bundle' : 'installed dependency'}: ${entry}`);
   child = spawn(process.execPath, [entry, ...ARGS], { stdio: 'inherit', env });
 } else {
   const npxCli = resolveNpxCli();
