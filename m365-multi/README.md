@@ -22,7 +22,7 @@ Scope is deliberately mail and calendar only. No files, SharePoint, or Teams.
 Add the marketplace, then install the plugin:
 
 ```
-/plugin marketplace add vail-digital/claude-m365-multi
+/plugin marketplace add Vaildigital/claude-m365-multi
 ```
 
 ```
