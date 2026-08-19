@@ -1,0 +1,10 @@
+{
+  "name": "m365-multi-plugin",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Bundled dependency for the m365-multi Claude plugin, so the sign-in never depends on npx or PATH at runtime.",
+  "type": "module",
+  "dependencies": {
+    "@softeria/ms-365-mcp-server": "0.145.0"
+  }
+}
