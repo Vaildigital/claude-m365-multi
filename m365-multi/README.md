@@ -31,19 +31,25 @@ Add the marketplace, then install the plugin:
 
 ## Sign in
 
-**Sign in from a terminal, not by asking Claude to log you in.** In Cowork the plugin's server is
-restarted between turns, and the device code flow polls inside that process — so an in-app login is
-discarded before you finish in the browser and silently never completes. A terminal command runs to
-completion in one process and writes the token cache the plugin reads.
+Just ask Claude, once per account:
 
-Run this **once per account**. It prints a URL and a short code — open the URL, enter the code, and
-sign in as the account you want to add. Repeat for each mailbox.
+> Add a Microsoft 365 account.
+
+Claude returns a URL and a short code. Open the URL, enter the code, and sign in as the account you
+want to add. Then ask Claude to check it worked. Repeat for each mailbox.
+
+**Use this plugin's `start-login` tool, not the `login` tool on the m365 server.** They look
+interchangeable and are not. The `login` tool polls for completion inside the m365 server process,
+and Cowork restarts that process between turns — so the poll is discarded while you are still in the
+browser, and the sign-in silently never completes no matter how many times you retry.
+`start-login` runs the sign-in as an independent background process that survives the restart, so it
+finishes whenever you do.
+
+A terminal alternative is available if you prefer it, or for scripted setup:
 
 ```bash
 npx -y @softeria/ms-365-mcp-server@0.145.0 --preset outlook --allowed-scopes "Mail.ReadWrite Mail.Send Calendars.ReadWrite User.Read" --login
 ```
-
-Then confirm what's registered:
 
 ```bash
 npx -y @softeria/ms-365-mcp-server@0.145.0 --list-accounts

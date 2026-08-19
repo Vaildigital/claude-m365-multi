@@ -10,6 +10,10 @@
         "--allowed-scopes",
         "Mail.ReadWrite Mail.Send Calendars.ReadWrite User.Read"
       ]
+    },
+    "m365-login": {
+      "command": "node",
+      "args": ["./login-helper.mjs"]
     }
   }
 }
