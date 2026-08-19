@@ -4,10 +4,10 @@
       "command": "node",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/vendor/ms365-server.mjs",
-        "--preset",
-        "outlook",
         "--allowed-scopes",
-        "Mail.ReadWrite Calendars.ReadWrite User.Read"
+        "Mail.ReadWrite Calendars.ReadWrite",
+        "--enabled-tools",
+        "^(list-mail|get-mail|list-calendar|get-calendar|find-meeting-times|create-draft-email|create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts)"
       ],
       "env": {
         "MS365_MCP_REQUIRE_CONFIRM": "true"

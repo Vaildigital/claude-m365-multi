@@ -18,12 +18,23 @@ import { existsSync } from 'node:fs';
 import { join, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Mail.Send is deliberately absent. The agent reads untrusted email content, so
-// granting it send rights creates a prompt-injection path to sending mail from
-// the user's mailboxes. Drafting needs only Mail.ReadWrite; a human sends from
-// Outlook. See SECURITY-REVIEW.md.
-const SCOPES = 'Mail.ReadWrite Calendars.ReadWrite User.Read';
-const ARGS = ['--preset', 'outlook', '--allowed-scopes', SCOPES, '--login'];
+// These must match .mcp.json exactly: the scopes granted at sign-in are derived
+// from the enabled tool surface, so a mismatch would consent to more than the
+// server can use.
+//
+// Mail.Send is deliberately absent — the agent reads untrusted email content, so
+// send rights create a prompt-injection path to sending mail as the user.
+// Drafting needs only Mail.ReadWrite; a human sends from Outlook.
+//
+// The tool allow-list removes delete, move and calendar-sharing tools, which are
+// the remaining ways an injected instruction could destroy, conceal or leak.
+// Note --enabled-tools is silently ignored when --preset is set, so no preset.
+// See SECURITY-REVIEW.md.
+const SCOPES = 'Mail.ReadWrite Calendars.ReadWrite';
+const ALLOW =
+  '^(list-mail|get-mail|list-calendar|get-calendar|find-meeting-times|create-draft-email|' +
+  'create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts)';
+const ARGS = ['--allowed-scopes', SCOPES, '--enabled-tools', ALLOW, '--login'];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const nodeDir = dirname(process.execPath);

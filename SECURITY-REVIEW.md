@@ -136,11 +136,72 @@ registering your own multi-tenant app if councils push back on the publisher or 
 
 ---
 
+---
+
+# Round 2 — reviewed at 0.6.0
+
+Round 1 items 1–5 and 7 are addressed: `Mail.Send` is gone, `npx` is gone from every path, the
+vendored build is checksummed, PowerShell arguments are escaped, logs are swept, and blast radius
+and revocation are documented. Three things remain.
+
+## 8. The destructive surface is still wide open — HIGH
+
+Removing `Mail.Send` closed the *send* path. It did not close the others. The live tool list at 0.6.0
+is 68 tools, of which 22 mutate and several are dangerous in a council context:
+
+- **Destruction** — `delete-mail-message`, `delete-mail-folder`, `delete-calendar-event`,
+  `delete-calendar`. Councils carry statutory record-retention duties; an agent that can delete mail
+  is a records-management problem before it is a security one.
+- **Concealment** — `move-mail-message`, `copy-mail-message`. Mail can be moved out of sight.
+- **Exfiltration that survives losing `Mail.Send`** — `create-my-calendar-permission` grants another
+  party access to a calendar. An injected instruction can share a council calendar externally
+  without sending a single email.
+
+`MS365_MCP_REQUIRE_CONFIRM=true` is set, and `delete-mail-message` does expose a `confirm` parameter
+— but the same agent that was influenced by the injected text also supplies `confirm: true`. It
+guards against accidental misrouting, not against an adversary.
+
+**Fix, tested:** replace `--preset outlook` with an explicit allow-list. Note that
+`--enabled-tools` is **silently ignored when `--preset` is set** — a genuine footgun, and the reason
+an earlier attempt at this appeared to do nothing. Dropping the preset and passing:
+
+```
+--enabled-tools "^(list-mail|get-mail|list-calendar|get-calendar|list-mail-folders|find-meeting-times|create-draft-email|create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts)"
+```
+
+yields **27 tools with exactly one mutating tool** (`update-calendar-event`) and no delete, move, or
+calendar-permission tools at all. Reading, searching, drafting and calendar work are unaffected.
+
+## 9. Temp-file handling is unsafe on POSIX — MEDIUM (conditional)
+
+`login-helper.mjs` writes run logs to `os.tmpdir()` under names derived from `Date.now()`, and
+`sweepOldLogs()` unlinks matching files there. On Windows `%TEMP%` is per-user, so this is fine
+today. On macOS and Linux `/tmp` is shared: a local attacker can pre-create
+`m365-multi-login-<predictable>.log` as a symlink, and `writeFileSync(LOG, '')` will truncate the
+target, or `openSync(LOG, 'a')` append to it.
+
+Not exploitable in the current Windows-only scope, but it becomes live the moment a Mac client is
+onboarded — the same release that would also silently downgrade credential storage.
+
+**Fix:** create a per-run private directory with `mkdtempSync` (mode 0700) instead of predictable
+names in the shared temp root.
+
+## 10. Diagnostics reach the transcript — LOW
+
+`start-login` and `login-status` return the last 500 characters of the sign-in process output, and
+the runner logs `process.execPath` and environment shape. No token material is expected there, and
+it has been genuinely useful for debugging, but it is a standing path from process internals into a
+conversation that may be shared. Worth trimming now that onboarding works.
+
+---
+
 ## What to fix before customer distribution
 
-1. Decide the write posture: read-only, `MS365_MCP_REQUIRE_CONFIRM=true`, or drop `Mail.Send`.
-2. Remove the `npx` fallback.
-3. Publish the bundle's SHA-256 and the rebuild command; tell customers to pin a commit SHA.
-4. Fix the PowerShell quoting.
-5. Document credential blast radius and revocation.
-6. Protect the `Vaildigital` GitHub account as production infrastructure.
+1. **Apply the tool allow-list** (item 8). This is the single highest-value change remaining.
+2. Fix POSIX temp handling before any non-Windows client (item 9).
+3. Trim diagnostic output (item 10).
+4. Publish the bundle SHA-256 with each release; require customers to pin a commit SHA.
+5. Protect the `Vaildigital` GitHub account as production infrastructure — 2FA, branch protection,
+   signed commits. Push access to that repo is code execution on every customer machine.
+6. Re-issue existing Entra grants without `Mail.Send`; removing the scope from the request does not
+   revoke what was already consented.

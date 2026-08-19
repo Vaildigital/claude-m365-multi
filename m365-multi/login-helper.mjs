@@ -18,20 +18,30 @@ import {
   writeFileSync,
   unlinkSync,
   readdirSync,
-  statSync,
+  lstatSync,
+  mkdtempSync,
+  rmSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Each sign-in gets its own log files, named by run id, with the paths recorded
-// in STATE. A previous run's output can then never be mistaken for the current
-// one — which otherwise leaves status reporting a dead run as "pending" forever.
+// Each sign-in gets its own private directory, created with mkdtemp so the name
+// is unpredictable and the directory is 0700 on POSIX. Predictable names in the
+// shared temp root would let a local user pre-create a symlink and have us
+// truncate or append to the target — harmless on Windows, where TEMP is
+// per-user, but live on macOS and Linux.
+//
+// Keeping each run separate also means a previous run's output can never be
+// mistaken for the current one, which otherwise left a dead run reporting
+// "pending" forever.
+const RUN_PREFIX = 'm365-multi-login-';
 const STATE = join(tmpdir(), 'm365-multi-login.json');
-const logPaths = (runId) => ({
-  out: join(tmpdir(), `m365-multi-login-${runId}.log`),
-  err: join(tmpdir(), `m365-multi-login-${runId}.err.log`),
-});
+
+const makeRunDir = () => {
+  const dir = mkdtempSync(join(tmpdir(), RUN_PREFIX));
+  return { dir, out: join(dir, 'out.log'), err: join(dir, 'err.log') };
+};
 
 const readState = () => {
   try {
@@ -73,30 +83,32 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // parsed as PowerShell.
 const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
-// Remove run logs from previous sign-ins. They accumulate in TEMP otherwise, and
-// they hold device codes and account names.
-const sweepOldLogs = () => {
+// Remove run directories from previous sign-ins. They accumulate otherwise, and
+// they hold device codes and account names. Symlinks are skipped so this can
+// never be used to delete something outside the temp root.
+const sweepOldRuns = () => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   try {
     for (const name of readdirSync(tmpdir())) {
-      if (!/^m365-multi-login-.+\.log$/.test(name)) continue;
+      if (!name.startsWith(RUN_PREFIX)) continue;
       const p = join(tmpdir(), name);
       try {
-        if (statSync(p).mtimeMs < cutoff) unlinkSync(p);
+        const st = lstatSync(p);
+        if (!st.isDirectory() || st.isSymbolicLink()) continue;
+        if (st.mtimeMs < cutoff) rmSync(p, { recursive: true, force: true });
       } catch {}
     }
   } catch {}
 };
 
 async function startLogin() {
-  sweepOldLogs();
+  sweepOldRuns();
   try {
     if (existsSync(STATE)) unlinkSync(STATE);
   } catch {}
 
-  const runId = Date.now().toString(36);
-  const { out: LOG, err: LOG_ERR } = logPaths(runId);
-  const state = { runId, out: LOG, err: LOG_ERR, startedAt: Date.now() };
+  const { dir, out: LOG, err: LOG_ERR } = makeRunDir();
+  const state = { dir, out: LOG, err: LOG_ERR, startedAt: Date.now() };
 
   const runner = join(dirname(fileURLToPath(import.meta.url)), 'login-runner.mjs');
 
@@ -127,7 +139,11 @@ async function startLogin() {
     child.unref();
   }
 
-  writeFileSync(STATE, JSON.stringify(state));
+  // 'wx' fails rather than following a pre-existing symlink at this path.
+  try {
+    unlinkSync(STATE);
+  } catch {}
+  writeFileSync(STATE, JSON.stringify(state), { flag: 'wx', mode: 0o600 });
 
   // Wait for the device code to appear. npx may need to fetch the package first,
   // which on a cold cache can take a while.

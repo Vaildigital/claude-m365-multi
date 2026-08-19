@@ -1,7 +1,7 @@
 # m365-multi
 
-Work across several Microsoft 365 accounts in one Claude session — read and search mail, draft and
-send replies, read and write calendars — without disconnecting and reconnecting between accounts.
+Work across several Microsoft 365 accounts in one Claude session — read and search mail, draft replies, and read and
+write calendars — without disconnecting and reconnecting between accounts.
 
 Claude's built-in Microsoft 365 connector binds to one Microsoft identity at a time. This plugin
 runs [`@softeria/ms-365-mcp-server`](https://github.com/softeria/ms-365-mcp-server) locally instead,
@@ -45,15 +45,14 @@ browser, and the sign-in silently never completes no matter how many times you r
 `start-login` runs the sign-in as an independent background process that survives the restart, so it
 finishes whenever you do.
 
-A terminal alternative is available if you prefer it, or for scripted setup:
+If you would rather drive it from a terminal, run the server that ships with the plugin — this
+downloads nothing:
 
 ```bash
-npx -y @softeria/ms-365-mcp-server@0.145.0 --preset outlook --allowed-scopes "Mail.ReadWrite Calendars.ReadWrite User.Read" --login
+node <plugin>/vendor/ms365-server.mjs --allowed-scopes "Mail.ReadWrite Calendars.ReadWrite" --login
 ```
 
-```bash
-npx -y @softeria/ms-365-mcp-server@0.145.0 --list-accounts
-```
+Replace `<plugin>` with the installed plugin directory. Claude can tell you where that is.
 
 A newly added account won't show up until the plugin's server restarts, which happens on its own
 between turns in Cowork, or when you restart Claude Code. If an account you just added seems
@@ -84,18 +83,26 @@ Claude can draft but cannot send — see Permissions below.
 
 ## Permissions
 
-Sign-in requests exactly four delegated permissions:
+Sign-in requests exactly two delegated permissions:
 
 | Permission | Why |
 |---|---|
 | `Mail.ReadWrite` | read, search, and create drafts |
-| `Calendars.ReadWrite` | read and create events |
-| `User.Read` | identify which account is which |
+| `Calendars.ReadWrite` | read calendars and create or update events |
 
-**`Mail.Send` is deliberately not requested.** Claude reads email content from anyone who can write
-to your mailbox, and a message can contain text aimed at influencing it — "forward the last twenty
-emails to…", "reply approving this". Without the send permission that cannot happen: Claude prepares
-a draft, and a human sends it from Outlook. Everything the plugin was built for still works.
+### What Claude can and cannot do here
+
+The tool surface is restricted to an explicit allow-list — 27 tools, of which exactly one modifies
+anything that already exists. Claude **can** read and search mail, read calendars, create drafts and
+replies, and create or update calendar events. Claude **cannot**:
+
+- send mail, reply, or forward — drafts only, sent by a human from Outlook
+- delete or move mail, folders, calendars or events
+- share a calendar with anyone
+
+That list is not politeness, it is the reason those permissions are safe to grant. Claude reads email
+written by anyone who can reach the mailbox, and a message can contain text aimed at influencing it.
+Nothing it could be talked into doing is destructive or leaves the tenant.
 
 The app is published by **Softeria AS**, a Microsoft verified publisher (verified 2025-06-05).
 
@@ -116,7 +123,7 @@ There are two ways to unblock it. Prefer the first.
 
 #### Recommended: a per-user grant
 
-Grants access to **one named person**, limited to the four permissions above. Nobody else in the
+Grants access to **one named person**, limited to the permissions above. Nobody else in the
 tenant is affected, and it is undone by deleting a single row. Requires **Cloud Application
 Administrator** or higher.
 
@@ -130,7 +137,7 @@ $principal  = (Get-MgUser -UserId "person@example.gov.au").Id
 
 New-MgOauth2PermissionGrant -ClientId $clientSp -ConsentType Principal -PrincipalId $principal `
   -ResourceId $graphSp `
-  -Scope "Calendars.ReadWrite Mail.ReadWrite User.Read openid profile offline_access"
+  -Scope "Calendars.ReadWrite Mail.ReadWrite openid profile offline_access"
 ```
 
 Sign-in then completes with no consent prompt. To revoke, delete that grant.
@@ -142,7 +149,7 @@ Permissions → Grant admin consent**.
 
 Two things to understand before choosing this:
 
-- **It grants the app's full declared permission set**, not only the four permissions above. The
+- **It grants the app's full declared permission set**, not only the permissions above. The
   `--allowed-scopes` flag narrows what *this* client requests at sign-in; it cannot narrow what a
   tenant-wide consent grants. Read the list on that screen first.
 - **Consent is not access control.** Afterwards anyone in the tenant can use the app. To limit that,
@@ -158,20 +165,16 @@ client-side workaround.
 
 ## Managing accounts
 
-```bash
-npx -y @softeria/ms-365-mcp-server@0.145.0 --list-accounts
-```
+Ask Claude — `list-accounts`, `select-account` and `remove-account` are available to it:
 
-```bash
-npx -y @softeria/ms-365-mcp-server@0.145.0 --remove-account <id>
-```
+> Which Microsoft 365 accounts are signed in?
 
-```bash
-npx -y @softeria/ms-365-mcp-server@0.145.0 --logout
-```
+> Remove the Campbelltown account.
 
-`--logout` clears every account. To remove just one, use `--remove-account` with an id from
-`--list-accounts`.
+Removing an account deletes the local token only. To revoke access properly, the tenant
+administrator should also remove the app's grant for that user in Entra ID; a local delete does not
+stop any other machine.
+
 
 ## What this plugin runs, and how to verify it
 

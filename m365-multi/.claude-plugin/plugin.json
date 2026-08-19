@@ -1,6 +1,6 @@
 {
   "name": "m365-multi",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Multi-account Microsoft 365 mail and calendar. Sign in to as many work accounts as you need; every tool takes an `account` argument to pick the mailbox.",
   "author": {
     "name": "Vail Digital"
