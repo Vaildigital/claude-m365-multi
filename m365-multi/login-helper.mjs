@@ -158,9 +158,12 @@ const TOOLS = [
   {
     name: 'start-login',
     description:
-      'Begin adding a Microsoft 365 account. Returns a URL and device code for the user to open in ' +
-      'a browser. The sign-in runs in a detached background process, so it completes even though the ' +
-      'MCP server is restarted between turns. Use this instead of the m365 login tool.',
+      'THE ONLY WORKING WAY to add or sign in a Microsoft 365 / Outlook account. Always use this ' +
+      'instead of the m365 server\'s `login` tool, which fails silently in Cowork: it polls inside a ' +
+      'process that is restarted between turns, so the user completes the browser step and no token ' +
+      'is ever written, with no error shown. This tool runs the sign-in in an independent background ' +
+      'process that survives the restart. Returns a URL and device code to give the user; then call ' +
+      'login-status.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
