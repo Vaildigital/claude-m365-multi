@@ -84,20 +84,53 @@ The app is published by **Softeria AS**, a Microsoft verified publisher (verifie
 
 ### If you see "Need admin approval"
 
-That tenant restricts user consent for these permissions, so an administrator has to approve the app
-once. In the Microsoft Entra admin center, as Cloud Application Administrator or higher:
+Most managed tenants disable user consent to applications entirely. An administrator can confirm
+with:
+
+```bash
+az rest --method get --url "https://graph.microsoft.com/v1.0/policies/authorizationPolicy"
+```
+
+If `defaultUserRolePermissions.permissionGrantPoliciesAssigned` contains no app-consent policy (only
+the `...-for-team` and `...-for-chat` entries, or nothing), then **no ordinary user in that tenant
+can consent to any app** and every sign-in will hit this wall until an administrator acts.
+
+There are two ways to unblock it. Prefer the first.
+
+#### Recommended: a per-user grant
+
+Grants access to **one named person**, limited to the four permissions above. Nobody else in the
+tenant is affected, and it is undone by deleting a single row. Requires **Cloud Application
+Administrator** or higher.
+
+```powershell
+# Microsoft Graph PowerShell
+Connect-MgGraph -Scopes "DelegatedPermissionGrant.ReadWrite.All"
+
+$clientSp   = (Get-MgServicePrincipal -Filter "appId eq '084a3e9f-a9f4-43f7-89f9-d229cf97853e'").Id
+$graphSp    = (Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'").Id
+$principal  = (Get-MgUser -UserId "person@example.gov.au").Id
+
+New-MgOauth2PermissionGrant -ClientId $clientSp -ConsentType Principal -PrincipalId $principal `
+  -ResourceId $graphSp `
+  -Scope "Calendars.ReadWrite Mail.ReadWrite Mail.Send User.Read openid profile offline_access"
+```
+
+Sign-in then completes with no consent prompt. To revoke, delete that grant.
+
+#### Alternative: tenant-wide admin consent
 
 **Entra ID → Enterprise applications → All applications →** search **"MS 365 MCP Server" → Security →
 Permissions → Grant admin consent**.
 
-Two things an administrator should know before approving:
+Two things to understand before choosing this:
 
-- **Admin consent grants the app's full declared permission set**, not only the four permissions
-  above. The `--allowed-scopes` flag narrows what *this* client asks for at sign-in; it cannot
-  narrow what a tenant-wide consent grants. Review the list on that screen before granting.
-- **Consent is not access control.** By default anyone in the tenant can then use the app. To limit
-  it, set **Properties → Assignment required → Yes** and assign only the intended users under
-  **Users and groups**.
+- **It grants the app's full declared permission set**, not only the four permissions above. The
+  `--allowed-scopes` flag narrows what *this* client requests at sign-in; it cannot narrow what a
+  tenant-wide consent grants. Read the list on that screen first.
+- **Consent is not access control.** Afterwards anyone in the tenant can use the app. To limit that,
+  set **Properties → Assignment required → Yes** and assign only the intended users under **Users and
+  groups**.
 
 ### If sign-in is blocked outright
 
