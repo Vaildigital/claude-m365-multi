@@ -7,7 +7,8 @@
     {
       "name": "m365-multi",
       "source": "./m365-multi",
-      "description": "Read, search and draft across multiple Microsoft 365 mailboxes and calendars in one session, without reconnecting between accounts."
+      "version": "0.8.0",
+      "description": "Read, search and draft across multiple Microsoft 365 mailboxes and calendars, and read Teams, SharePoint, OneDrive and shared mailboxes, in one session without reconnecting between accounts."
     }
   ]
 }
