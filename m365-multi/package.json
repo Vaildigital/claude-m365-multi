@@ -1,6 +1,6 @@
 {
   "name": "m365-multi-plugin",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "Build tooling for the m365-multi Claude plugin. The server is vendored into vendor/ as a single file, so the plugin never downloads code, resolves PATH, or requires an install at runtime. Nothing here is a runtime dependency.",
   "type": "module",

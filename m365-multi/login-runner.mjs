@@ -30,11 +30,24 @@ import { fileURLToPath } from 'node:url';
 // the remaining ways an injected instruction could destroy, conceal or leak.
 // Note --enabled-tools is silently ignored when --preset is set, so no preset.
 // See SECURITY-REVIEW.md.
-const SCOPES = 'Mail.ReadWrite Calendars.ReadWrite';
+//
+// Teams, SharePoint, OneDrive and shared mailboxes are read-only. Those tools
+// carry work-account scopes, which the server only requests under --org-mode.
+const SCOPES =
+  'Mail.ReadWrite Calendars.ReadWrite Calendars.Read.Shared Mail.Read.Shared ' +
+  'Chat.Read ChatMessage.Read Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All ' +
+  'OnlineMeetings.Read OnlineMeetingTranscript.Read.All Sites.Read.All Files.Read Files.Read.All People.Read';
 const ALLOW =
   '^(list-mail|get-mail|list-calendar|get-calendar|find-meeting-times|create-draft-email|' +
-  'create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts)';
-const ARGS = ['--allowed-scopes', SCOPES, '--enabled-tools', ALLOW, '--login'];
+  'create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts|' +
+  'list-chats|get-chat$|list-chat-messages|get-chat-message$|list-chat-message-replies|' +
+  'list-joined-teams|list-team-channels|list-channel-messages|get-channel-message$|list-channel-message-replies|' +
+  'list-online-meetings|list-meeting-transcripts|get-meeting-transcript|' +
+  'search-sharepoint-sites|get-sharepoint-site$|list-sharepoint-site-drives|list-sharepoint-site-items|' +
+  'get-sharepoint-site-item$|list-sharepoint-site-lists|list-sharepoint-site-list-items|' +
+  'list-drives|get-drive-item$|search-onedrive-files|get-download-url|download-bytes$|' +
+  'list-shared-mailbox-messages|get-shared-mailbox-message|search-query)';
+const ARGS = ['--org-mode', '--allowed-scopes', SCOPES, '--enabled-tools', ALLOW, '--login'];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const nodeDir = dirname(process.execPath);

@@ -1,14 +1,20 @@
 # m365-multi
 
-Work across several Microsoft 365 accounts in one Claude session — read and search mail, draft replies, and read and
-write calendars — without disconnecting and reconnecting between accounts.
+Work across several Microsoft 365 accounts in one Claude session — read and search mail, draft replies, read and
+write calendars, and read Teams, SharePoint, OneDrive and shared mailboxes — without disconnecting and reconnecting
+between accounts.
 
 Claude's built-in Microsoft 365 connector binds to one Microsoft identity at a time. This plugin
 runs [`@softeria/ms-365-mcp-server`](https://github.com/softeria/ms-365-mcp-server) locally instead,
 which keeps a token per account and adds an `account` argument to every tool. Sign in once per
 account and they all stay available.
 
-Scope is deliberately mail and calendar only. No files, SharePoint, or Teams.
+Mail and calendar can be read and drafted. Teams, SharePoint, OneDrive and shared mailboxes are read-only: Claude
+can list and read chats, channel messages, meeting transcripts, sites, lists and files, and cannot post, upload,
+share or delete anything. Nothing here can send.
+
+**Upgrading from 0.7.0 or earlier:** the wider read scopes need new consent, so every account has to sign in again
+after the upgrade. Existing tokens keep working for mail and calendar until then.
 
 ## Requirements
 
@@ -49,10 +55,12 @@ If you would rather drive it from a terminal, run the server that ships with the
 downloads nothing:
 
 ```bash
-node <plugin>/vendor/ms365-server.mjs --allowed-scopes "Mail.ReadWrite Calendars.ReadWrite" --login
+node <plugin>/login-runner.mjs
 ```
 
-Replace `<plugin>` with the installed plugin directory. Claude can tell you where that is.
+Replace `<plugin>` with the installed plugin directory. Claude can tell you where that is. The runner
+passes the same scope list and tool allow-list as `.mcp.json`, so a terminal sign-in consents to
+exactly what the server can use.
 
 A newly added account won't show up until the plugin's server restarts, which happens on its own
 between turns in Cowork, or when you restart Claude Code. If an account you just added seems
@@ -83,22 +91,38 @@ Claude can draft but cannot send — see Permissions below.
 
 ## Permissions
 
-Sign-in requests exactly two delegated permissions:
+Sign-in requests these delegated permissions. Only the first two allow any write.
 
 | Permission | Why |
 |---|---|
 | `Mail.ReadWrite` | read, search, and create drafts |
 | `Calendars.ReadWrite` | read calendars and create or update events |
+| `Calendars.Read.Shared` | read calendars shared with the user |
+| `Mail.Read.Shared` | read shared mailboxes the user has access to |
+| `Chat.Read`, `ChatMessage.Read` | list and read Teams chats |
+| `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Read.All` | list joined teams and channels, read channel messages |
+| `OnlineMeetings.Read`, `OnlineMeetingTranscript.Read.All` | list Teams meetings and read their transcripts |
+| `Sites.Read.All` | search SharePoint sites, read their lists, list items and files |
+| `Files.Read`, `Files.Read.All` | read OneDrive and SharePoint files |
+| `People.Read` | Microsoft Search ranks results by the people the user works with |
+
+`ChannelMessage.Read.All` and `OnlineMeetingTranscript.Read.All` need administrator consent in every
+tenant, not only in tenants that block user consent. If your tenant allows user consent for the rest,
+the sign-in still stops at those two until an administrator grants them.
 
 ### What Claude can and cannot do here
 
-The tool surface is restricted to an explicit allow-list — 27 tools, of which exactly one modifies
+The tool surface is restricted to an explicit allow-list, of which exactly one tool modifies
 anything that already exists. Claude **can** read and search mail, read calendars, create drafts and
-replies, and create or update calendar events. Claude **cannot**:
+replies, create or update calendar events, and read Teams chats, channel messages, meeting
+transcripts, SharePoint sites, lists and files, OneDrive files and shared mailboxes. Claude **cannot**:
 
 - send mail, reply, or forward — drafts only, sent by a human from Outlook
 - delete or move mail, folders, calendars or events
 - share a calendar with anyone
+- post to a Teams chat or channel, or react to a message
+- upload, rename, move, share or delete a file
+- write to a SharePoint list or a shared mailbox
 
 That list is not politeness, it is the reason those permissions are safe to grant. Claude reads email
 written by anyone who can reach the mailbox, and a message can contain text aimed at influencing it.
@@ -137,7 +161,7 @@ $principal  = (Get-MgUser -UserId "person@example.gov.au").Id
 
 New-MgOauth2PermissionGrant -ClientId $clientSp -ConsentType Principal -PrincipalId $principal `
   -ResourceId $graphSp `
-  -Scope "Calendars.ReadWrite Mail.ReadWrite openid profile offline_access"
+  -Scope "Mail.ReadWrite Calendars.ReadWrite Calendars.Read.Shared Mail.Read.Shared Chat.Read ChatMessage.Read Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All OnlineMeetings.Read OnlineMeetingTranscript.Read.All Sites.Read.All Files.Read Files.Read.All People.Read openid profile offline_access"
 ```
 
 Sign-in then completes with no consent prompt. To revoke, delete that grant.

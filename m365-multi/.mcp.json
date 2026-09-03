@@ -4,10 +4,11 @@
       "command": "node",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/vendor/ms365-server.mjs",
+        "--org-mode",
         "--allowed-scopes",
-        "Mail.ReadWrite Calendars.ReadWrite",
+        "Mail.ReadWrite Calendars.ReadWrite Calendars.Read.Shared Mail.Read.Shared Chat.Read ChatMessage.Read Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All OnlineMeetings.Read OnlineMeetingTranscript.Read.All Sites.Read.All Files.Read Files.Read.All People.Read",
         "--enabled-tools",
-        "^(list-mail|get-mail|list-calendar|get-calendar|find-meeting-times|create-draft-email|create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts)"
+        "^(list-mail|get-mail|list-calendar|get-calendar|find-meeting-times|create-draft-email|create-reply-draft|create-reply-all-draft|create-calendar-event|update-calendar-event|list-accounts|list-chats|get-chat$|list-chat-messages|get-chat-message$|list-chat-message-replies|list-joined-teams|list-team-channels|list-channel-messages|get-channel-message$|list-channel-message-replies|list-online-meetings|list-meeting-transcripts|get-meeting-transcript|search-sharepoint-sites|get-sharepoint-site$|list-sharepoint-site-drives|list-sharepoint-site-items|get-sharepoint-site-item$|list-sharepoint-site-lists|list-sharepoint-site-list-items|list-drives|get-drive-item$|search-onedrive-files|get-download-url|download-bytes$|list-shared-mailbox-messages|get-shared-mailbox-message|search-query)"
       ],
       "env": {
         "MS365_MCP_REQUIRE_CONFIRM": "true"

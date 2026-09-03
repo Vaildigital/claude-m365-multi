@@ -53,8 +53,31 @@ escape.
 - **`expired`** — the code timed out unused. Start a new one.
 - **`declined`** — cancelled, or a consent failure ended the flow. Start a new one.
 
+- **`retry_needed` or `admin_consent_required` on an account that used to work** — the plugin's
+  scope list grew in 0.8.0 (Teams, SharePoint, OneDrive and shared mailboxes, all read-only). An
+  account signed in under an earlier version keeps working for mail and calendar, but any Teams or
+  SharePoint call fails with "Failed to acquire token" until that account signs in again. Say that,
+  then run `start-login` for it. In a tenant that blocks user consent, the administrator's per-user
+  grant has to be re-issued with the new scope list first (README, "Recommended: a per-user grant").
+
+## When a tool says "Failed to acquire token"
+
+The server hides the Microsoft error code. Do not tell the user the token "may have expired" and stop.
+Two causes look identical from the tool result and need different answers:
+
+- The refresh token was revoked (password change, admin session revoke) or expired. A fresh
+  `start-login` fixes it.
+- The tenant enforces a Conditional Access sign-in frequency on that account, so the refresh token
+  dies a fixed number of hours after every sign-in. A fresh sign-in fixes it only until the next
+  expiry. The user needs that tenant's administrator to exclude the app or the account from the
+  policy; there is no client-side fix.
+
+To tell them apart, run the server once in verbose mode from a terminal and read the `AADSTS` code it
+logs: `AADSTS50173` is a revoke, `AADSTS70043` is sign-in frequency.
+
 ## Using accounts once added
 
 Every tool takes an `account` argument once more than one account is signed in. Pass the address
 explicitly rather than relying on the default, and when the user's request spans mailboxes, call the
-tool once per account rather than assuming one covers them all.
+tool once per account rather than assuming one covers them all. Teams, SharePoint and OneDrive tools
+are per account too: a chat, site or file visible to one account is not visible to another.
