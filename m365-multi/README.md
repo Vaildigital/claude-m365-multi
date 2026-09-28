@@ -32,7 +32,7 @@ Add the marketplace, then install the plugin:
 ```
 
 ```
-/plugin install m365-multi@vail-m365
+/plugin install m365-multi@claude-m365-multi
 ```
 
 ## Sign in

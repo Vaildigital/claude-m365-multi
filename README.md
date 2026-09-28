@@ -15,7 +15,7 @@ different tenants.
 ```
 
 ```
-/plugin install m365-multi@vail-m365
+/plugin install m365-multi@claude-m365-multi
 ```
 
 Then ask Claude to add an account. Full setup, sign-in troubleshooting, and admin-consent guidance
@@ -46,7 +46,7 @@ The reasoning, and the risks that remain, are written up in
 ## Repository layout
 
 ```
-.claude-plugin/marketplace.json   marketplace manifest ("vail-m365")
+.claude-plugin/marketplace.json   marketplace manifest ("claude-m365-multi")
 SECURITY-REVIEW.md                threat model, findings, and what remains
 m365-multi/
   .claude-plugin/plugin.json      plugin manifest
